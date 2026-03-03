@@ -1,36 +1,67 @@
-"""Spotify API interactions for recommendations and playlist creation."""
+"""Spotify API interactions for playlist creation and track resolution."""
 
 from spotipy import Spotify
 
 from app.services.spotify_auth import get_spotify_client
 
 
-def get_recommendations(
-    token: dict,
-    target_bpm: int,
-    vibe_params: dict,
-    limit: int = 40,
+def _sanitize_search_term(s: str) -> str:
+    """Escape characters that break Spotify search."""
+    return s.replace('"', "").strip() or "Unknown"
+
+
+def resolve_deezer_to_spotify(
+    sp: Spotify,
+    candidates: list,
+    limit: int = 20,
 ) -> list[dict]:
-    """Over-fetch track recommendations from Spotify."""
-    sp = get_spotify_client(token)
-    min_tempo = max(0, target_bpm - 10)
-    max_tempo = min(250, target_bpm + 10)
-    kwargs: dict = {
-        "limit": limit,
-        "min_tempo": min_tempo,
-        "max_tempo": max_tempo,
-        "target_energy": vibe_params.get("target_energy", 0.7),
-        "target_valence": vibe_params.get("target_valence", 0.6),
-        "target_danceability": vibe_params.get("target_danceability", 0.7),
-    }
-    if vibe_params.get("seed_genres"):
-        kwargs["seed_genres"] = vibe_params["seed_genres"][:5]
-    if vibe_params.get("seed_artists"):
-        kwargs["seed_artists"] = vibe_params["seed_artists"][:5]
-    if vibe_params.get("seed_tracks"):
-        kwargs["seed_tracks"] = vibe_params["seed_tracks"][:5]
-    # Ensure at least one seed
-    if not kwargs.get("seed_genres") and not kwargs.get("seed_artists") and not kwargs.get("seed_tracks"):
-        kwargs["seed_genres"] = ["pop", "electronic"]
-    recs = sp.recommendations(**kwargs)
-    return recs.get("tracks", [])
+    """
+    Resolve Deezer candidates to Spotify tracks.
+    Tries ISRC first, then track+artist search. Deduplicates by Spotify ID.
+    Returns list of Spotify track dicts (id, name, artists, preview_url).
+    """
+    seen_ids: set[str] = set()
+    tracks: list[dict] = []
+
+    for c in candidates:
+        if len(tracks) >= limit:
+            break
+        spotify_track = None
+
+        # 1. Try ISRC first if available
+        if getattr(c, "isrc", None) and str(c.isrc).strip():
+            try:
+                q = f"isrc:{_sanitize_search_term(str(c.isrc))}"
+                result = sp.search(q=q, type="track", limit=1)
+                items = (result.get("tracks") or {}).get("items") or []
+                if items:
+                    t = items[0]
+                    tid = t.get("id")
+                    if tid and tid not in seen_ids:
+                        spotify_track = t
+            except Exception:
+                pass
+
+        # 2. Fallback: track + artist
+        if not spotify_track:
+            try:
+                title = _sanitize_search_term(getattr(c, "title", "") or "Unknown")
+                artist = _sanitize_search_term(getattr(c, "artist", "") or "Unknown")
+                q = f'track:"{title}" artist:"{artist}"'
+                result = sp.search(q=q, type="track", limit=1)
+                items = (result.get("tracks") or {}).get("items") or []
+                if items:
+                    t = items[0]
+                    tid = t.get("id")
+                    if tid and tid not in seen_ids:
+                        spotify_track = t
+            except Exception:
+                pass
+
+        if spotify_track:
+            tid = spotify_track.get("id")
+            if tid:
+                seen_ids.add(tid)
+                tracks.append(spotify_track)
+
+    return tracks[:limit]

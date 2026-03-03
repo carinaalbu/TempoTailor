@@ -3,7 +3,11 @@ from pydantic import BaseModel
 
 class CurationRequest(BaseModel):
     pace_min_per_km: float
-    vibe_prompt: str
+    vibe_prompt: str = ""
+    target_energy: float | None = None
+    target_valence: float | None = None
+    target_danceability: float | None = None
+    seed_genres: list[str] | None = None
 
 
 class CurationTrack(BaseModel):

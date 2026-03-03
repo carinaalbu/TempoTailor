@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from app.api.dependencies import get_bearer_token
 from app.schemas.curation import CurationRequest, CurationResponse, CurationTrack
 from app.services.pace_service import pace_to_bpm
 from app.services.llm_service import translate_vibe, judge_tracks
@@ -12,11 +13,9 @@ router = APIRouter(prefix="/curation", tags=["curation"])
 @router.post("", response_model=CurationResponse)
 def create_curation(
     req: CurationRequest,
-    authorization: str | None = Header(None, alias="Authorization"),
+    token_str: str = Depends(get_bearer_token),
 ):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing or invalid authorization")
-    token = {"access_token": authorization.replace("Bearer ", "")}
+    token = {"access_token": token_str}
 
     target_bpm = pace_to_bpm(req.pace_min_per_km)
     try:

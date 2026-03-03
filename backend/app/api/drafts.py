@@ -1,30 +1,18 @@
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.api.dependencies import get_bearer_token, get_current_user_id
 from app.db.session import get_db
 from app.models.draft import Draft, DraftTrack
-from app.schemas.draft import DraftCreate, DraftRead, DraftUpdate, DraftTrackRead, DraftTrackCreate, DraftTrackCreate
+from app.schemas.draft import DraftCreate, DraftRead, DraftUpdate, DraftTrackRead, DraftTrackCreate
 
 router = APIRouter(prefix="/drafts", tags=["drafts"])
-
-
-def _get_user_id(authorization: str | None = Header(None, alias="Authorization")) -> str:
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing or invalid authorization")
-    from app.services.spotify_auth import get_spotify_client
-    token = authorization.replace("Bearer ", "")
-    try:
-        sp = get_spotify_client({"access_token": token})
-        user = sp.current_user()
-        return user["id"]
-    except Exception:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
 
 
 @router.get("", response_model=list[DraftRead])
 def list_drafts(
     db: Session = Depends(get_db),
-    user_id: str = Depends(_get_user_id),
+    user_id: str = Depends(get_current_user_id),
 ):
     drafts = db.query(Draft).filter(Draft.spotify_user_id == user_id).order_by(Draft.updated_at.desc()).all()
     return drafts
@@ -34,7 +22,7 @@ def list_drafts(
 def get_draft(
     draft_id: int,
     db: Session = Depends(get_db),
-    user_id: str = Depends(_get_user_id),
+    user_id: str = Depends(get_current_user_id),
 ):
     draft = db.query(Draft).filter(Draft.id == draft_id, Draft.spotify_user_id == user_id).first()
     if not draft:
@@ -46,7 +34,7 @@ def get_draft(
 def create_draft(
     body: DraftCreate,
     db: Session = Depends(get_db),
-    user_id: str = Depends(_get_user_id),
+    user_id: str = Depends(get_current_user_id),
 ):
     draft = Draft(
         title=body.title,
@@ -85,7 +73,7 @@ def update_draft(
     draft_id: int,
     body: DraftUpdate,
     db: Session = Depends(get_db),
-    user_id: str = Depends(_get_user_id),
+    user_id: str = Depends(get_current_user_id),
 ):
     draft = db.query(Draft).filter(Draft.id == draft_id, Draft.spotify_user_id == user_id).first()
     if not draft:
@@ -118,19 +106,16 @@ def update_draft(
 def publish_draft(
     draft_id: int,
     db: Session = Depends(get_db),
-    user_id: str = Depends(_get_user_id),
-    authorization: str | None = Header(None, alias="Authorization"),
+    user_id: str = Depends(get_current_user_id),
+    token_str: str = Depends(get_bearer_token),
 ):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing or invalid authorization")
-    token = authorization.replace("Bearer ", "")
 
     draft = db.query(Draft).filter(Draft.id == draft_id, Draft.spotify_user_id == user_id).first()
     if not draft:
         raise HTTPException(status_code=404, detail="Draft not found")
 
     from app.services.spotify_auth import get_spotify_client
-    sp = get_spotify_client({"access_token": token})
+    sp = get_spotify_client({"access_token": token_str})
 
     playlist = sp.user_playlist_create(
         user=user_id,
@@ -149,7 +134,7 @@ def publish_draft(
 def delete_draft(
     draft_id: int,
     db: Session = Depends(get_db),
-    user_id: str = Depends(_get_user_id),
+    user_id: str = Depends(get_current_user_id),
 ):
     draft = db.query(Draft).filter(Draft.id == draft_id, Draft.spotify_user_id == user_id).first()
     if not draft:

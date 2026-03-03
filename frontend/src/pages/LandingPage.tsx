@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/card'
 
 export function LandingPage() {
   const navigate = useNavigate()
-  const { user, login } = useAuth()
+  const { user, login, authError, clearAuthError } = useAuth()
 
   return (
     <div className="min-h-screen bg-gray-950 text-white overflow-hidden">
@@ -27,6 +27,21 @@ export function LandingPage() {
             Enter your target pace and describe the vibe. TempoTailor uses AI to curate
             a Spotify playlist tuned to your cadence—no more skipping mid-run.
           </p>
+          {authError && (
+            <div
+              className="mb-6 px-4 py-3 rounded-lg bg-red-500/20 text-red-400 text-sm flex items-center justify-between max-w-md mx-auto"
+              role="alert"
+            >
+              <span>{authError}</span>
+              <button
+                onClick={clearAuthError}
+                className="text-red-300 hover:text-red-200 ml-2"
+                aria-label="Dismiss"
+              >
+                ×
+              </button>
+            </div>
+          )}
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button
               onClick={user ? () => navigate('/create') : login}

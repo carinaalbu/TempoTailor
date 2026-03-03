@@ -8,7 +8,7 @@ import {
 } from 'react'
 import { api } from '../lib/api'
 
-const API_BASE = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
+const API_BASE = import.meta.env.VITE_BACKEND_URL || 'http://127.0.0.1:8000'
 
 interface User {
   id: string
@@ -20,11 +20,20 @@ interface AuthContextType {
   user: User | null
   token: string | null
   isLoading: boolean
+  authError: string | null
   login: () => void
   logout: () => void
+  clearAuthError: () => void
 }
 
 const AuthContext = createContext<AuthContextType | null>(null)
+
+const ERROR_MESSAGES: Record<string, string> = {
+  missing_code: 'Authorization was cancelled or incomplete.',
+  invalid_state: 'Invalid login state. Please try again.',
+  auth_failed: 'Spotify authentication failed. Please try again.',
+  access_denied: 'You denied access to your Spotify account.',
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
@@ -32,6 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.getItem('spotify_token')
   )
   const [isLoading, setIsLoading] = useState(true)
+  const [authError, setAuthError] = useState<string | null>(null)
 
   const fetchUser = useCallback(async (accessToken: string) => {
     try {
@@ -39,18 +49,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         headers: { Authorization: `Bearer ${accessToken}` },
       })
       setUser(data)
+      setAuthError(null)
     } catch {
       setUser(null)
+      setToken(null)
       localStorage.removeItem('spotify_token')
+      localStorage.removeItem('spotify_refresh_token')
     }
   }, [])
+
+  const clearAuthError = useCallback(() => setAuthError(null), [])
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const urlToken = params.get('token')
+    const urlError = params.get('error')
+
+    if (urlError) {
+      setAuthError(ERROR_MESSAGES[urlError] || 'Login failed. Please try again.')
+      setToken(null)
+      localStorage.removeItem('spotify_token')
+      window.history.replaceState({}, '', window.location.pathname)
+      setIsLoading(false)
+      return
+    }
+
     if (urlToken) {
+      const urlRefresh = params.get('refresh_token')
       localStorage.setItem('spotify_token', urlToken)
+      if (urlRefresh) localStorage.setItem('spotify_refresh_token', urlRefresh)
       setToken(urlToken)
+      setAuthError(null)
       fetchUser(urlToken).finally(() => setIsLoading(false))
       window.history.replaceState({}, '', window.location.pathname)
     } else if (token) {
@@ -61,17 +90,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [token, fetchUser])
 
   const login = () => {
+    setAuthError(null)
     window.location.href = `${API_BASE}/auth/login`
   }
 
   const logout = () => {
     localStorage.removeItem('spotify_token')
+    localStorage.removeItem('spotify_refresh_token')
     setToken(null)
     setUser(null)
+    setAuthError(null)
   }
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, logout }}>
+    <AuthContext.Provider value={{ user, token, isLoading, authError, login, logout, clearAuthError }}>
       {children}
     </AuthContext.Provider>
   )

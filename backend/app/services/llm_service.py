@@ -1,0 +1,110 @@
+"""LLM services using local LM Studio (OpenAI-compatible API)."""
+
+import json
+from openai import OpenAI
+
+from app.core.config import settings
+from app.schemas.llm import VibeTranslation, JudgeResult
+
+_client: OpenAI | None = None
+
+
+def _get_client() -> OpenAI:
+    global _client
+    if _client is None:
+        _client = OpenAI(
+            base_url=settings.lm_studio_base_url,
+            api_key="lm-studio",  # Not used by LM Studio
+        )
+    return _client
+
+
+VIBE_SYSTEM = """You translate natural language "vibe" descriptions into Spotify API parameters.
+Output valid JSON matching this schema:
+{
+  "target_energy": 0.0-1.0,
+  "target_valence": 0.0-1.0,
+  "target_danceability": 0.0-1.0,
+  "seed_genres": ["genre1", "genre2"],
+  "seed_artists": [],
+  "seed_tracks": []
+}
+Use only Spotify-valid genre names (e.g. pop, rock, electronic, hip-hop, indie).
+Return ONLY the JSON object, no markdown or extra text."""
+
+JUDGE_SYSTEM = """You are a harsh music curator. Given a list of tracks and a vibe description, select exactly 20 tracks that best match the vibe.
+Drop any tracks that don't fit. Output valid JSON:
+{
+  "track_ids": ["id1", "id2", ...],
+  "vibe_score": 1-100,
+  "curator_note": "Brief note about the selection"
+}
+Return ONLY the JSON object, no markdown or extra text."""
+
+
+def translate_vibe(vibe_prompt: str) -> VibeTranslation:
+    client = _get_client()
+    try:
+        resp = client.chat.completions.create(
+            model="",  # LM Studio uses default model
+            messages=[
+                {"role": "system", "content": VIBE_SYSTEM},
+                {"role": "user", "content": vibe_prompt},
+            ],
+        )
+    except Exception as e:
+        raise RuntimeError(f"LLM request failed: {e}") from e
+    text = resp.choices[0].message.content.strip()
+    # Strip markdown code blocks if present
+    if text.startswith("```"):
+        text = text.split("```")[1]
+        if text.startswith("json"):
+            text = text[4:]
+    try:
+        data = json.loads(text)
+        return VibeTranslation.model_validate(data)
+    except (json.JSONDecodeError, Exception) as e:
+        raise ValueError(f"Invalid LLM vibe output: {e}") from e
+
+
+def judge_tracks(
+    track_list: list[dict],
+    vibe_prompt: str,
+) -> JudgeResult:
+    """Filter tracks to exactly 20. track_list items must have 'id' and 'name'."""
+    client = _get_client()
+    tracks_str = "\n".join(
+        f"- {t.get('id', '')} | {t.get('name', 'Unknown')} - {t.get('artists', [{}])[0].get('name', '')}"
+        for t in track_list[:40]
+    )
+    user_msg = f"Vibe: {vibe_prompt}\n\nTracks:\n{tracks_str}\n\nSelect exactly 20 track IDs that best match the vibe."
+    resp = client.chat.completions.create(
+        model="",
+        messages=[
+            {"role": "system", "content": JUDGE_SYSTEM},
+            {"role": "user", "content": user_msg},
+        ],
+    )
+    text = resp.choices[0].message.content.strip()
+    if text.startswith("```"):
+        text = text.split("```")[1]
+        if text.startswith("json"):
+            text = text[4:]
+    try:
+        data = json.loads(text)
+        result = JudgeResult.model_validate(data)
+    except (json.JSONDecodeError, Exception) as e:
+        raise ValueError(f"Invalid LLM judge output: {e}") from e
+    # Ensure exactly 20 - truncate or pad from input if needed
+    if len(result.track_ids) > 20:
+        result.track_ids = result.track_ids[:20]
+    elif len(result.track_ids) < 20 and track_list:
+        ids_seen = set(result.track_ids)
+        for t in track_list:
+            if len(result.track_ids) >= 20:
+                break
+            tid = t.get("id")
+            if tid and tid not in ids_seen:
+                result.track_ids.append(tid)
+                ids_seen.add(tid)
+    return result

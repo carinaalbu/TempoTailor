@@ -4,6 +4,7 @@ import { api } from '../lib/api'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card'
+import { PreviewPlayer, usePreviewPlayer } from '../components/PreviewPlayer'
 
 interface CurationTrack {
   id: string
@@ -28,6 +29,7 @@ export function ResultPage() {
   const [title, setTitle] = useState(curation?.generated_title ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const { audioRef, playingId, play, pause, handleEnded } = usePreviewPlayer()
 
   if (!curation) {
     return (
@@ -105,6 +107,7 @@ export function ResultPage() {
           <CardTitle>Tracks ({curation.tracks.length})</CardTitle>
         </CardHeader>
         <CardContent>
+          <audio ref={audioRef} onEnded={handleEnded} className="hidden" />
           <ul className="space-y-3">
             {curation.tracks.map((t, i) => (
               <li key={t.id} className="flex items-center gap-4">
@@ -116,7 +119,13 @@ export function ResultPage() {
                   </p>
                 </div>
                 {t.preview_url && (
-                  <audio controls src={t.preview_url} className="h-8 w-32" />
+                  <PreviewPlayer
+                    trackId={t.id}
+                    previewUrl={t.preview_url}
+                    isPlaying={playingId === t.id}
+                    onPlay={play}
+                    onPause={pause}
+                  />
                 )}
               </li>
             ))}

@@ -1,6 +1,7 @@
 """LLM services using local LM Studio (OpenAI-compatible API)."""
 
 import json
+import re
 from pathlib import Path
 
 from openai import OpenAI
@@ -33,23 +34,30 @@ def _get_client() -> OpenAI:
 
 
 VIBE_SYSTEM = """You translate natural language "vibe" descriptions into Spotify API parameters.
-Output valid JSON matching this schema:
+Output valid JSON matching this schema (target_energy, target_valence, target_danceability are floats 0.0 to 1.0):
 {
-  "target_energy": 0.0-1.0,
-  "target_valence": 0.0-1.0,
-  "target_danceability": 0.0-1.0,
+  "target_energy": 0.5,
+  "target_valence": 0.6,
+  "target_danceability": 0.5,
   "seed_genres": ["genre1", "genre2"],
   "seed_artists": [],
   "seed_tracks": []
 }
-Use only Spotify-valid genre names (e.g. pop, rock, electronic, hip-hop, indie).
+Use ONLY these genre names (they map to Deezer charts): pop, rock, electronic, hip-hop, indie, r&b, dance, house, acoustic, jazz. Do NOT use folk, nature, ambient, or other unmapped genres.
+If the user mentions specific artists or songs, add their names to seed_artists or seed_tracks (up to 3 each).
+Return only the best-matching seed_genres (1–4). No padding. First 1–2 = primary; remaining = fallback when not enough songs are found.
 Output ONLY the JSON object. No reasoning, explanation, or markdown."""
 
-JUDGE_SYSTEM = """You are a harsh music curator. Given a list of tracks and a vibe description, select exactly 20 tracks that best match the vibe.
-Drop any tracks that don't fit. Output valid JSON:
+JUDGE_SYSTEM = """You are a harsh music curator. Tracks are pre-filtered for running pace (BPM).
+
+First, interpret the user's natural language input: extract the "vibe" they mean—mood, energy, style, context (e.g. "chill morning run" → relaxed, low energy, uplifting; "intense workout" → high energy, aggressive). Transform their words into a clear internal understanding of what music fits.
+
+Then select up to 20 tracks that best match that interpreted vibe (select all that fit if fewer than 20). Drop any tracks that don't fit.
+
+Output valid JSON (vibe_score is an integer 1 to 100):
 {
   "track_ids": ["id1", "id2", ...],
-  "vibe_score": 1-100,
+  "vibe_score": 75,
   "curator_note": "Brief note about the selection"
 }
 Return ONLY the JSON object, no markdown or extra text."""
@@ -106,6 +114,8 @@ def translate_vibe(vibe_prompt: str) -> VibeTranslation:
         idx = text.find("{")
         if idx >= 0:
             text = text[idx:]
+    # Fix common LLM mistakes: literal "0.0-1.0" or "1-100" instead of numbers
+    text = re.sub(r':\s*(\d+\.?\d*)-(\d+\.?\d*)', r': \1', text)
     try:
         data = json.loads(text)
         return VibeTranslation.model_validate(data)
@@ -127,9 +137,9 @@ def judge_tracks(
     client = _get_client()
     tracks_str = "\n".join(
         f"- {t.get('id', '')} | {t.get('name', 'Unknown')} - {t.get('artists', [{}])[0].get('name', '')}"
-        for t in track_list[:40]
+        for t in track_list[:60]
     )
-    user_msg = f"Vibe: {vibe_prompt}\n\nTracks:\n{tracks_str}\n\nSelect exactly 20 track IDs that best match the vibe."
+    user_msg = f"User's description (interpret this into a vibe): {vibe_prompt}\n\nTracks:\n{tracks_str}\n\nSelect up to 20 track IDs that best match the vibe (select all that fit if there are fewer than 20)."
     resp = client.chat.completions.create(
         model=settings.lm_studio_model or "",
         messages=[
@@ -165,13 +175,14 @@ def judge_tracks(
             text = text[idx:]
     try:
         data = json.loads(text)
+        # Truncate to 20 before validation/normalization
+        if len(data.get("track_ids", [])) > 20:
+            data["track_ids"] = data["track_ids"][:20]
         result = JudgeResult.model_validate(data)
     except (json.JSONDecodeError, Exception) as e:
         raise ValueError(f"Invalid LLM judge output: {e}") from e
-    # Ensure exactly 20 - truncate or pad from input if needed
-    if len(result.track_ids) > 20:
-        result.track_ids = result.track_ids[:20]
-    elif len(result.track_ids) < 20 and track_list:
+    # Pad to 20 if under
+    if len(result.track_ids) < 20 and track_list:
         ids_seen = set(result.track_ids)
         for t in track_list:
             if len(result.track_ids) >= 20:

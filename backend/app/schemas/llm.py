@@ -17,6 +17,6 @@ class VibeTranslation(BaseModel):
 class JudgeResult(BaseModel):
     """LLM Judge output: filtered track IDs and metadata."""
 
-    track_ids: list[str] = Field(min_length=1, max_length=20)
+    track_ids: list[str] = Field(min_length=1)  # truncated to 25 in llm_service before validation
     vibe_score: int = Field(ge=1, le=100)
     curator_note: str

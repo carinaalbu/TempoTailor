@@ -4,6 +4,7 @@ import { api } from '../lib/api'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card'
+import { PreviewPlayer, usePreviewPlayer } from '../components/PreviewPlayer'
 
 interface DraftTrack {
   id: number
@@ -30,6 +31,7 @@ export function DraftDetailPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const { audioRef, playingId, play, pause, handleEnded } = usePreviewPlayer()
 
   useEffect(() => {
     if (!id) return
@@ -133,6 +135,7 @@ export function DraftDetailPage() {
           <CardTitle>Tracks ({draft.tracks.length})</CardTitle>
         </CardHeader>
         <CardContent>
+          <audio ref={audioRef} onEnded={handleEnded} className="hidden" />
           <ul className="space-y-3">
             {draft.tracks.map((t, i) => (
               <li
@@ -147,7 +150,13 @@ export function DraftDetailPage() {
                   )}
                 </div>
                 {t.preview_url && (
-                  <audio controls src={t.preview_url} className="h-8 w-32" />
+                  <PreviewPlayer
+                    trackId={t.spotify_track_id}
+                    previewUrl={t.preview_url}
+                    isPlaying={playingId === t.spotify_track_id}
+                    onPlay={play}
+                    onPause={pause}
+                  />
                 )}
                 <Button
                   variant="ghost"

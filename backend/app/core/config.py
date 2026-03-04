@@ -5,7 +5,7 @@ class Settings(BaseSettings):
     # LM Studio (local LLM) - no API key required
     lm_studio_base_url: str = "http://localhost:1234/v1"
     lm_studio_model: str = ""  # Empty = use loaded model. Set to model ID if LM Studio doesn't pick it up.
-    skip_judge_tracks: bool = True  # Skip LLM track filtering for faster generation
+    skip_judge_tracks: bool = False  # LLM judges tracks for vibe fit; set True to skip
 
     @property
     def lm_studio_base_url_normalized(self) -> str:

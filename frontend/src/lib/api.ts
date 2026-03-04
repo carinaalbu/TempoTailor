@@ -20,9 +20,14 @@ api.interceptors.request.use((config) => {
 
 let refreshPromise: Promise<string | null> | null = null
 
+export const SPOTIFY_AUTH_EXPIRED_EVENT = 'spotify-auth-expired'
+
 async function doRefresh(): Promise<string | null> {
   const refreshToken = localStorage.getItem('spotify_refresh_token')
-  if (!refreshToken) return null
+  if (!refreshToken) {
+    window.dispatchEvent(new CustomEvent(SPOTIFY_AUTH_EXPIRED_EVENT))
+    return null
+  }
   try {
     const { data } = await axios.post(`${BACKEND_BASE}/auth/refresh`, {
       refresh_token: refreshToken,
@@ -35,6 +40,7 @@ async function doRefresh(): Promise<string | null> {
   } catch {
     localStorage.removeItem('spotify_token')
     localStorage.removeItem('spotify_refresh_token')
+    window.dispatchEvent(new CustomEvent(SPOTIFY_AUTH_EXPIRED_EVENT))
     return null
   }
 }
@@ -52,6 +58,7 @@ api.interceptors.response.use(
       }
       const newToken = await refreshPromise
       if (newToken) {
+        originalRequest._retry = true
         originalRequest.headers.Authorization = `Bearer ${newToken}`
         return api(originalRequest)
       }

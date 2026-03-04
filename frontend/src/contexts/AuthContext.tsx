@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from 'react'
 import { api } from '../lib/api'
+import { SPOTIFY_AUTH_EXPIRED_EVENT } from '../lib/api'
 
 const API_BASE = import.meta.env.VITE_BACKEND_URL || 'http://127.0.0.1:8000'
 
@@ -23,6 +24,7 @@ interface AuthContextType {
   authError: string | null
   login: () => void
   logout: () => void
+  reAuthorize: () => void
   clearAuthError: () => void
 }
 
@@ -94,16 +96,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.location.href = `${API_BASE}/auth/login`
   }
 
-  const logout = () => {
+  const logout = useCallback(() => {
     localStorage.removeItem('spotify_token')
     localStorage.removeItem('spotify_refresh_token')
     setToken(null)
     setUser(null)
     setAuthError(null)
-  }
+  }, [])
+
+  const reAuthorize = useCallback(() => {
+    localStorage.removeItem('spotify_token')
+    localStorage.removeItem('spotify_refresh_token')
+    setToken(null)
+    setUser(null)
+    setAuthError(null)
+    window.location.href = `${API_BASE}/auth/login`
+  }, [])
+
+  useEffect(() => {
+    const handleAuthExpired = () => {
+      setToken(null)
+      setUser(null)
+      if (sessionStorage.getItem('spotify_403')) {
+        sessionStorage.removeItem('spotify_403')
+        setAuthError('Spotify denied access. Please log in again to grant permissions.')
+      }
+    }
+    window.addEventListener(SPOTIFY_AUTH_EXPIRED_EVENT, handleAuthExpired)
+    return () => window.removeEventListener(SPOTIFY_AUTH_EXPIRED_EVENT, handleAuthExpired)
+  }, [])
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, authError, login, logout, clearAuthError }}>
+    <AuthContext.Provider value={{ user, token, isLoading, authError, login, logout, reAuthorize, clearAuthError }}>
       {children}
     </AuthContext.Provider>
   )

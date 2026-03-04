@@ -147,5 +147,12 @@ def me(authorization: str | None = Header(None, alias="Authorization")):
             "display_name": user.get("display_name"),
             "email": user.get("email"),
         }
-    except Exception:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    except Exception as e:
+        from spotipy.exceptions import SpotifyException
+
+        if isinstance(e, SpotifyException) and getattr(e, "http_status", None) == 403:
+            raise HTTPException(
+                status_code=403,
+                detail="Missing permissions. Please log out and log in again to grant access.",
+            ) from e
+        raise HTTPException(status_code=401, detail="Invalid or expired token") from e

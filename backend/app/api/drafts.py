@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+import httpx
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_bearer_token, get_current_user_id
@@ -102,6 +103,45 @@ def update_draft(
     return draft
 
 
+def _create_playlist(token: str, title: str, public: bool = True) -> dict:
+    """Create playlist via POST /me/playlists (Feb 2026 Spotify API)."""
+    payload = {"name": title or "Pace Runner Playlist", "public": public}
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    resp = httpx.post("https://api.spotify.com/v1/me/playlists", json=payload, headers=headers, timeout=20.0)
+    if resp.status_code >= 400:
+        try:
+            body = resp.json()
+            message = (body.get("error") or {}).get("message", resp.text)
+        except Exception:
+            message = resp.text
+        raise HTTPException(
+            status_code=min(resp.status_code, 502),
+            detail=f"Spotify denied access: {message}" if resp.status_code == 403 else f"Spotify error: {message}",
+        )
+    return resp.json()
+
+
+def _add_playlist_items(token: str, playlist_id: str, uris: list[str]) -> None:
+    """Add tracks via POST /playlists/{id}/items (Feb 2026 Spotify API)."""
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    resp = httpx.post(
+        f"https://api.spotify.com/v1/playlists/{playlist_id}/items",
+        json={"uris": uris},
+        headers=headers,
+        timeout=20.0,
+    )
+    if resp.status_code >= 400:
+        try:
+            body = resp.json()
+            message = (body.get("error") or {}).get("message", resp.text)
+        except Exception:
+            message = resp.text
+        raise HTTPException(
+            status_code=min(resp.status_code, 502),
+            detail=f"Spotify denied access: {message}" if resp.status_code == 403 else f"Spotify error: {message}",
+        )
+
+
 @router.post("/{draft_id}/publish")
 def publish_draft(
     draft_id: int,
@@ -109,25 +149,44 @@ def publish_draft(
     user_id: str = Depends(get_current_user_id),
     token_str: str = Depends(get_bearer_token),
 ):
-
     draft = db.query(Draft).filter(Draft.id == draft_id, Draft.spotify_user_id == user_id).first()
     if not draft:
         raise HTTPException(status_code=404, detail="Draft not found")
 
-    from app.services.spotify_auth import get_spotify_client
-    sp = get_spotify_client({"access_token": token_str})
+    track_uris = []
+    for t in draft.tracks:
+        tid = (t.spotify_track_id or "").strip()
+        if tid and not any(c in tid for c in " /"):
+            track_uris.append(f"spotify:track:{tid}")
 
-    playlist = sp.user_playlist_create(
-        user=user_id,
-        name=draft.title,
-        public=True,
-    )
-    playlist_id = playlist["id"]
-    track_uris = [f"spotify:track:{t.spotify_track_id}" for t in draft.tracks]
+    try:
+        playlist = _create_playlist(
+            token=token_str,
+            title=draft.title or "Pace Runner Playlist",
+            public=True,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Failed to create playlist: {e}") from e
+
+    playlist_id = playlist.get("id")
+    if not playlist_id:
+        raise HTTPException(status_code=502, detail="Spotify did not return playlist ID")
+
     if track_uris:
-        sp.playlist_add_items(playlist_id, track_uris)
+        try:
+            _add_playlist_items(token=token_str, playlist_id=playlist_id, uris=track_uris)
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"Failed to add tracks: {e}") from e
 
-    return {"playlist_id": playlist_id, "playlist_url": playlist.get("external_urls", {}).get("spotify", "")}
+    playlist_url = (playlist.get("external_urls") or {}).get("spotify", "")
+    if not playlist_url:
+        playlist_url = f"https://open.spotify.com/playlist/{playlist_id}"
+
+    return {"playlist_id": playlist_id, "playlist_url": playlist_url}
 
 
 @router.delete("/{draft_id}")

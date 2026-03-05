@@ -1,18 +1,28 @@
-"""Convert target running pace (min/km) to BPM target for music cadence."""
+"""Convert target pace (min/km) to BPM for music cadence.
 
-MIN_BPM = 150
+Pace spans walking (12 min/km) through running (4 min/km):
+- 12 min/km -> 60 BPM (walking)
+- 10 min/km -> 90 BPM (brisk walk)
+- 8 min/km -> 120 BPM (jogging)
+- 6 min/km -> 150 BPM (running)
+- 4 min/km -> 180 BPM (fast run)
+"""
+
+MIN_BPM = 60
 MAX_BPM = 180
+PACE_MIN = 4
+PACE_MAX = 12
 
 
 def pace_to_bpm(pace_min_per_km: float) -> int:
     """
-    Convert target pace (e.g. 5.5 for 5:30 min/km) to BPM.
-    Faster pace -> higher cadence. Clamped to 150-180 BPM.
+    Convert target pace (min/km) to BPM.
+    Walking (12) -> 60 BPM, jogging (8) -> 120 BPM, running (4) -> 180 BPM.
     """
     if pace_min_per_km <= 0:
         return MAX_BPM
-    # Empirical: 4 min/km -> 180, 7 min/km -> 150
-    bpm = round(180 - (pace_min_per_km - 4.0) * 10)
+    # Linear: 12 min/km -> 60, 4 min/km -> 180
+    bpm = round(60 + (PACE_MAX - pace_min_per_km) * (MAX_BPM - MIN_BPM) / (PACE_MAX - PACE_MIN))
     return max(MIN_BPM, min(MAX_BPM, bpm))
 
 

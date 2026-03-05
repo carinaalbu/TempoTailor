@@ -10,6 +10,7 @@ interface DraftTrack {
   name: string | null
   artists: string | null
   preview_url: string | null
+  deezer_track_id?: number | null
 }
 
 interface Draft {
@@ -55,7 +56,7 @@ export function HistoryPage() {
   const navigate = useNavigate()
   const [drafts, setDrafts] = useState<Draft[]>([])
   const [loading, setLoading] = useState(true)
-  const { audioRef, playingId, play, pause, handleEnded } = usePreviewPlayer()
+  const { audioRef, playingId, loadingId, play, pause, handleEnded } = usePreviewPlayer()
 
   useEffect(() => {
     api
@@ -130,12 +131,14 @@ export function HistoryPage() {
                         </p>
                       )}
                       <div className="flex items-center gap-3 pt-3 border-t border-white/5">
-                        {firstTrack?.preview_url ? (
+                        {(firstTrack?.deezer_track_id || firstTrack?.preview_url) ? (
                           <div onClick={(e) => e.stopPropagation()}>
                             <PreviewPlayer
                               trackId={firstTrack.spotify_track_id}
+                              deezerTrackId={firstTrack.deezer_track_id ?? null}
                               previewUrl={firstTrack.preview_url}
                               isPlaying={playingId === firstTrack.spotify_track_id}
+                              isLoading={loadingId === firstTrack.spotify_track_id}
                               onPlay={play}
                               onPause={pause}
                             />

@@ -20,3 +20,7 @@ class JudgeResult(BaseModel):
     track_ids: list[str] = Field(min_length=1)  # truncated to 25 in llm_service before validation
     vibe_score: int = Field(ge=1, le=100)
     curator_note: str
+    playlist_name: str = Field(
+        default="Run Vibes",
+        description="Cute, funky, suggestive playlist name (2–6 words) matching the vibe",
+    )

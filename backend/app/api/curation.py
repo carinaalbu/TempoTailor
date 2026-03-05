@@ -6,7 +6,7 @@ from app.schemas.curation import CurationRequest, CurationResponse, CurationTrac
 from app.schemas.llm import JudgeResult
 from app.schemas.llm import VibeTranslation
 from app.services.pace_service import pace_to_bpm
-from app.services.llm_service import translate_vibe, judge_tracks
+from app.services.llm_service import translate_vibe, judge_tracks, generate_playlist_name
 from app.services.deezer_service import get_deezer_candidates
 from app.services.spotify_service import (
     resolve_deezer_to_spotify,
@@ -128,14 +128,20 @@ def _create_curation_impl(req: CurationRequest, token: dict):
                 status_code=502,
                 detail="No matching tracks found on Spotify for Deezer results.",
             )
+        playlist_name = generate_playlist_name(req.vibe_prompt or "upbeat run", req.pace_min_per_km)
         judge_result = JudgeResult(
             track_ids=track_ids,
             vibe_score=75,
             curator_note="Top 20 from Deezer discovery (BPM-matched).",
+            playlist_name=playlist_name,
         )
     else:
         try:
-            judge_result = judge_tracks(spotify_track_list, req.vibe_prompt or "custom")
+            judge_result = judge_tracks(
+                spotify_track_list,
+                req.vibe_prompt or "custom",
+                pace_min_per_km=req.pace_min_per_km,
+            )
         except Exception as e:
             raise HTTPException(status_code=502, detail=f"Track filtering failed: {e}") from e
     resolved_by_id = {rt.spotify_track.get("id"): rt for rt in resolved if rt.spotify_track.get("id")}
@@ -169,6 +175,7 @@ def _create_curation_impl(req: CurationRequest, token: dict):
         t = rt.spotify_track
         deezer_preview = rt.deezer_preview_url
         preview_url = t.get("preview_url") or deezer_preview
+        deezer_track_id = rt.deezer_track_id
         try:
             artists = [a.get("name", "") for a in (t.get("artists") or [])]
             tracks_detail.append(
@@ -177,13 +184,13 @@ def _create_curation_impl(req: CurationRequest, token: dict):
                     name=t.get("name") or "Unknown",
                     artists=artists,
                     preview_url=preview_url,
+                    deezer_track_id=deezer_track_id,
                 )
             )
         except Exception:
             continue
 
-    title_suffix = req.vibe_prompt[:30] if req.vibe_prompt else (primary_seed_genres[0] if primary_seed_genres else "custom")
-    generated_title = f"Run @ {req.pace_min_per_km:.1f} min/km · {title_suffix}..."
+    generated_title = judge_result.playlist_name
     return CurationResponse(
         track_ids=track_ids,
         tracks=tracks_detail,

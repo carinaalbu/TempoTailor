@@ -31,6 +31,7 @@ class DraftTrack(Base):
     track_order = Column(Integer, nullable=False, default=0)
     name = Column(String(512), nullable=True)
     artists = Column(String(512), nullable=True)  # comma-separated
-    preview_url = Column(String(1024), nullable=True)
+    preview_url = Column(String(1024), nullable=True)  # deprecated; use deezer_track_id + JIT fetch
+    deezer_track_id = Column(Integer, nullable=True)  # for just-in-time preview URL fetching
 
     draft = relationship("Draft", back_populates="tracks")

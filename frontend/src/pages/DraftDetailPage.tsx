@@ -13,6 +13,7 @@ interface DraftTrack {
   name: string | null
   artists: string | null
   preview_url: string | null
+  deezer_track_id?: number | null
 }
 
 interface Draft {
@@ -31,7 +32,7 @@ export function DraftDetailPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const { audioRef, playingId, play, pause, handleEnded } = usePreviewPlayer()
+  const { audioRef, playingId, loadingId, play, pause, handleEnded } = usePreviewPlayer()
 
   useEffect(() => {
     if (!id) return
@@ -67,6 +68,7 @@ export function DraftDetailPage() {
           name: t.name,
           artists: t.artists ? t.artists.split(', ') : [],
           preview_url: t.preview_url,
+          deezer_track_id: t.deezer_track_id ?? null,
         })),
       })
       setDraft({ ...draft, title })
@@ -149,11 +151,13 @@ export function DraftDetailPage() {
                     <p className="text-sm text-gray-400 truncate">{t.artists}</p>
                   )}
                 </div>
-                {t.preview_url && (
+                {(t.deezer_track_id || t.preview_url) && (
                   <PreviewPlayer
                     trackId={t.spotify_track_id}
+                    deezerTrackId={t.deezer_track_id ?? null}
                     previewUrl={t.preview_url}
                     isPlaying={playingId === t.spotify_track_id}
+                    isLoading={loadingId === t.spotify_track_id}
                     onPlay={play}
                     onPause={pause}
                   />

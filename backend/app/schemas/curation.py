@@ -15,6 +15,7 @@ class CurationTrack(BaseModel):
     name: str
     artists: list[str]
     preview_url: str | None
+    deezer_track_id: int | None = None
 
 
 class CurationResponse(BaseModel):

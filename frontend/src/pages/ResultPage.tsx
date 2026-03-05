@@ -11,6 +11,7 @@ interface CurationTrack {
   name: string
   artists: string[]
   preview_url: string | null
+  deezer_track_id?: number | null
 }
 
 interface CurationState {
@@ -29,7 +30,7 @@ export function ResultPage() {
   const [title, setTitle] = useState(curation?.generated_title ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const { audioRef, playingId, play, pause, handleEnded } = usePreviewPlayer()
+  const { audioRef, playingId, loadingId, play, pause, handleEnded } = usePreviewPlayer()
 
   if (!curation) {
     return (
@@ -58,6 +59,7 @@ export function ResultPage() {
           name: t.name,
           artists: t.artists,
           preview_url: t.preview_url,
+          deezer_track_id: t.deezer_track_id ?? null,
         })),
       })
       navigate('/history')
@@ -118,11 +120,13 @@ export function ResultPage() {
                     {t.artists.join(', ')}
                   </p>
                 </div>
-                {t.preview_url && (
+                {(t.deezer_track_id || t.preview_url) && (
                   <PreviewPlayer
                     trackId={t.id}
+                    deezerTrackId={t.deezer_track_id ?? null}
                     previewUrl={t.preview_url}
                     isPlaying={playingId === t.id}
+                    isLoading={loadingId === t.id}
                     onPlay={play}
                     onPause={pause}
                   />

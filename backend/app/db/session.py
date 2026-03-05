@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 from app.core.config import settings
@@ -21,3 +21,10 @@ def get_db():
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+    # Migration: add deezer_track_id to draft_tracks if missing (SQLite)
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE draft_tracks ADD COLUMN deezer_track_id INTEGER"))
+            conn.commit()
+    except Exception:
+        pass  # Column already exists or DB doesn't support this

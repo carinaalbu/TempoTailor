@@ -9,6 +9,7 @@ class DraftTrackRead(BaseModel):
     name: str | None = None
     artists: str | None = None
     preview_url: str | None = None
+    deezer_track_id: int | None = None
 
     class Config:
         from_attributes = True
@@ -19,6 +20,7 @@ class DraftTrackCreate(BaseModel):
     name: str | None = None
     artists: list[str] | str | None = None  # list or comma-separated
     preview_url: str | None = None
+    deezer_track_id: int | None = None
 
 
 class DraftCreate(BaseModel):

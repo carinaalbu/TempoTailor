@@ -10,10 +10,11 @@ from app.services.spotify_auth import get_spotify_client
 
 @dataclass
 class ResolvedTrack:
-    """Spotify track plus optional Deezer preview URL fallback."""
+    """Spotify track plus optional Deezer preview URL and track ID for JIT fetching."""
 
     spotify_track: dict
     deezer_preview_url: str | None
+    deezer_track_id: int | None = None
 
 
 def _sanitize_search_term(s: str) -> str:
@@ -122,6 +123,7 @@ def resolve_deezer_to_spotify(
             if tid:
                 seen_ids.add(tid)
                 deezer_preview = getattr(c, "preview_url", None)
-                tracks.append(ResolvedTrack(spotify_track=spotify_track, deezer_preview_url=deezer_preview))
+                deezer_track_id = getattr(c, "deezer_track_id", None)
+                tracks.append(ResolvedTrack(spotify_track=spotify_track, deezer_preview_url=deezer_preview, deezer_track_id=deezer_track_id))
 
     return tracks[:limit]

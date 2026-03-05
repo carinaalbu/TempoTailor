@@ -62,6 +62,7 @@ def create_draft(
             name=meta.name if meta else None,
             artists=artists_str,
             preview_url=meta.preview_url if meta else None,
+            deezer_track_id=meta.deezer_track_id if meta else None,
         )
         db.add(dt)
     db.commit()
@@ -96,6 +97,7 @@ def update_draft(
                 name=meta.name if meta else None,
                 artists=artists_str,
                 preview_url=meta.preview_url if meta else None,
+                deezer_track_id=meta.deezer_track_id if meta else None,
             )
             db.add(dt)
     db.commit()

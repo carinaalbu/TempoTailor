@@ -3,13 +3,23 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 
 const PACE_MIN = 4
-const PACE_MAX = 9
+const PACE_MAX = 12
 const PACE_STEP = 0.5
+
+const BPM_MIN = 60
+const BPM_MAX = 180
 
 function formatPace(n: number): string {
   const m = Math.floor(n)
   const sec = Math.round((n - m) * 60)
   return `${m}:${sec.toString().padStart(2, '0')}`
+}
+
+/** Match backend: 12 min/km -> 60 BPM (walking), 8 -> 120 (jogging), 4 -> 180 (running) */
+function paceToBpm(paceMinPerKm: number): number {
+  if (paceMinPerKm <= 0) return BPM_MAX
+  const bpm = Math.round(BPM_MIN + (PACE_MAX - paceMinPerKm) * (BPM_MAX - BPM_MIN) / (PACE_MAX - PACE_MIN))
+  return Math.max(BPM_MIN, Math.min(BPM_MAX, bpm))
 }
 
 export function CreatePage() {
@@ -59,21 +69,29 @@ export function CreatePage() {
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 Target pace (min/km)
               </label>
-              <div className="flex items-center gap-4 mt-6">
-                <div className="pace-slider-wrapper flex-1">
-                  <input
-                    type="range"
-                    min={PACE_MIN}
-                    max={PACE_MAX}
-                    step={PACE_STEP}
-                    value={pace}
-                    onChange={(e) => setPace(parseFloat(e.target.value))}
-                    className="pace-slider w-full cursor-pointer"
-                  />
+              <div className="flex flex-col gap-3 mt-6">
+                <div className="flex items-center gap-4">
+                  <div className="pace-slider-wrapper flex-1">
+                    <input
+                      type="range"
+                      min={PACE_MIN}
+                      max={PACE_MAX}
+                      step={PACE_STEP}
+                      value={pace}
+                      onChange={(e) => setPace(parseFloat(e.target.value))}
+                      className="pace-slider w-full cursor-pointer"
+                    />
+                  </div>
+                  <span className="text-white font-medium tabular-nums min-w-16">
+                    {formatPace(pace)}
+                  </span>
                 </div>
-                <span className="text-white font-medium tabular-nums min-w-16">
-                  {formatPace(pace)}
-                </span>
+                <p className="text-sm text-gray-400">
+                  Target BPM: <span className="text-green-400 font-medium tabular-nums">{paceToBpm(pace)}</span>
+                  {paceToBpm(pace) <= 90 && ' (walking)'}
+                  {paceToBpm(pace) > 90 && paceToBpm(pace) <= 140 && ' (jogging)'}
+                  {paceToBpm(pace) > 140 && ' (running)'}
+                </p>
               </div>
             </div>
 

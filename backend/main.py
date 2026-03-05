@@ -3,8 +3,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.audio import router as audio_router
 from app.api.auth import router as auth_router
 from app.api.curation import router as curation_router
+from app.api.debug import router as debug_router
 from app.api.drafts import router as drafts_router
 from app.core.config import settings
 from app.db.session import init_db
@@ -30,7 +32,9 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
+app.include_router(audio_router)
 app.include_router(curation_router)
+app.include_router(debug_router)
 app.include_router(drafts_router)
 
 

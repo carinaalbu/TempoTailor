@@ -44,7 +44,7 @@ Output valid JSON matching this schema (target_energy, target_valence, target_da
   "seed_tracks": []
 }
 Use ONLY these genre names (they map to Deezer charts): pop, rock, electronic, hip-hop, indie, r&b, dance, house, acoustic, jazz. Do NOT use folk, nature, ambient, or other unmapped genres.
-If the user mentions specific artists or songs, add their names to seed_artists or seed_tracks (up to 3 each).
+If the user mentions specific artists or songs, you MUST add their exact names to seed_artists or seed_tracks (up to 3 each). This is critical—users expect to hear songs from artists they name.
 Return only the best-matching seed_genres (1–4). No padding. First 1–2 = primary; remaining = fallback when not enough songs are found.
 Output ONLY the JSON object. No reasoning, explanation, or markdown."""
 
@@ -52,15 +52,43 @@ JUDGE_SYSTEM = """You are a harsh music curator. Tracks are pre-filtered for run
 
 First, interpret the user's natural language input: extract the "vibe" they mean—mood, energy, style, context (e.g. "chill morning run" → relaxed, low energy, uplifting; "intense workout" → high energy, aggressive). Transform their words into a clear internal understanding of what music fits.
 
-Then select up to 20 tracks that best match that interpreted vibe (select all that fit if fewer than 20). Drop any tracks that don't fit.
+Then select up to 20 tracks that best match that interpreted vibe (select all that fit if fewer than 20). If the user mentioned specific artists, strongly prefer including their tracks. Drop any tracks that don't fit.
 
 Output valid JSON (vibe_score is an integer 1 to 100):
 {
   "track_ids": ["id1", "id2", ...],
   "vibe_score": 75,
-  "curator_note": "Brief note about the selection"
+  "curator_note": "Brief note about the selection",
+  "playlist_name": "Cute funky playlist name"
 }
+
+Also generate a playlist_name: cute, funky, and suggestive. 2–6 words. Match the vibe. Examples: "Sunrise Strut", "Midnight Miles", "Synth Wave Sprint", "Sweat & Serotonin", "Pavement Dreams".
 Return ONLY the JSON object, no markdown or extra text."""
+
+NAME_SYSTEM = """Generate a cute, funky, suggestive playlist name for a running playlist. 2–6 words. Match the vibe.
+Output ONLY the name as plain text, no quotes, no JSON, no explanation. Examples: Sunrise Strut, Midnight Miles, Sweat & Serotonin."""
+
+
+def generate_playlist_name(vibe_prompt: str, pace_min_per_km: float) -> str:
+    """Lightweight LLM call for playlist name when judge is skipped."""
+    try:
+        client = _get_client()
+        user_msg = f"Vibe: {vibe_prompt or 'upbeat run'}. Pace: {pace_min_per_km:.1f} min/km. Generate a catchy playlist name."
+        resp = client.chat.completions.create(
+            model=settings.lm_studio_model or "",
+            messages=[
+                {"role": "system", "content": NAME_SYSTEM},
+                {"role": "user", "content": user_msg},
+            ],
+            max_tokens=64,
+        )
+        if resp.choices and resp.choices[0].message.content:
+            name = resp.choices[0].message.content.strip().strip('"\'')[:80]
+            if name:
+                return name
+    except Exception:
+        pass
+    return f"Run @ {pace_min_per_km:.1f} min/km"
 
 
 def translate_vibe(vibe_prompt: str) -> VibeTranslation:
@@ -129,6 +157,7 @@ def translate_vibe(vibe_prompt: str) -> VibeTranslation:
 def judge_tracks(
     track_list: list[dict],
     vibe_prompt: str,
+    pace_min_per_km: float | None = None,
 ) -> JudgeResult:
     """Filter tracks to exactly 20. track_list items must have 'id' and 'name'."""
     # #region agent log
@@ -139,14 +168,15 @@ def judge_tracks(
         f"- {t.get('id', '')} | {t.get('name', 'Unknown')} - {t.get('artists', [{}])[0].get('name', '')}"
         for t in track_list[:60]
     )
-    user_msg = f"User's description (interpret this into a vibe): {vibe_prompt}\n\nTracks:\n{tracks_str}\n\nSelect up to 20 track IDs that best match the vibe (select all that fit if there are fewer than 20)."
+    pace_ctx = f" Running pace: {pace_min_per_km:.1f} min/km." if pace_min_per_km is not None else ""
+    user_msg = f"User's description (interpret this into a vibe): {vibe_prompt}{pace_ctx}\n\nTracks:\n{tracks_str}\n\nSelect up to 20 track IDs that best match the vibe (select all that fit if there are fewer than 20). Also generate a playlist_name: cute, funky, suggestive (2–6 words)."
     resp = client.chat.completions.create(
         model=settings.lm_studio_model or "",
         messages=[
             {"role": "system", "content": JUDGE_SYSTEM},
             {"role": "user", "content": user_msg},
         ],
-        max_tokens=512,
+        max_tokens=768,
     )
     # #region agent log
     jc0 = resp.choices[0] if resp.choices else None
@@ -178,6 +208,12 @@ def judge_tracks(
         # Truncate to 20 before validation/normalization
         if len(data.get("track_ids", [])) > 20:
             data["track_ids"] = data["track_ids"][:20]
+        # Extract playlist_name (LLMs may use playlist_name, playlistName, or omit)
+        pn = data.get("playlist_name") or data.get("playlistName")
+        if not pn or not isinstance(pn, str) or not str(pn).strip():
+            data["playlist_name"] = "Run Vibes"
+        else:
+            data["playlist_name"] = str(pn).strip()[:80]
         result = JudgeResult.model_validate(data)
     except (json.JSONDecodeError, Exception) as e:
         raise ValueError(f"Invalid LLM judge output: {e}") from e

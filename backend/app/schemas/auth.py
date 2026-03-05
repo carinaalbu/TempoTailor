@@ -9,3 +9,4 @@ class UserInfo(BaseModel):
     id: str
     display_name: str | None
     email: str | None
+    image_url: str | None = None

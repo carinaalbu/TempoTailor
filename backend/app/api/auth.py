@@ -142,10 +142,13 @@ def me(authorization: str | None = Header(None, alias="Authorization")):
     try:
         sp = get_spotify_client({"access_token": token})
         user = sp.current_user()
+        images = user.get("images") or []
+        image_url = images[0].get("url") if images and isinstance(images[0], dict) else None
         return {
             "id": user["id"],
             "display_name": user.get("display_name"),
             "email": user.get("email"),
+            "image_url": image_url,
         }
     except Exception as e:
         from spotipy.exceptions import SpotifyException

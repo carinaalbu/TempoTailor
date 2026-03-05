@@ -1,76 +1,106 @@
-import { BrowserRouter, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom'
-import { useAuth } from '@/contexts/AuthContext'
-import { Button } from '@/components/ui/button'
-import { LandingPage } from '@/pages/LandingPage'
-import { CreatePage } from '@/pages/CreatePage'
-import { ResultPage } from '@/pages/ResultPage'
-import { HistoryPage } from '@/pages/HistoryPage'
-import { DraftDetailPage } from '@/pages/DraftDetailPage'
-import { PublishPage } from '@/pages/PublishPage'
-import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+  Link,
+  useLocation,
+} from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
+import { LandingPage } from "@/pages/LandingPage";
+import { CreatePage } from "@/pages/CreatePage";
+import { ResultPage } from "@/pages/ResultPage";
+import { HistoryPage } from "@/pages/HistoryPage";
+import { DraftDetailPage } from "@/pages/DraftDetailPage";
+import { PublishPage } from "@/pages/PublishPage";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 
 function AppLayout({ children }: { children: React.ReactNode }) {
-  const { user, isLoading, login, logout } = useAuth()
-  const location = useLocation()
-  const isLanding = location.pathname === '/'
+  const { user, isLoading, login, logout } = useAuth();
+  const location = useLocation();
+  const isLanding = location.pathname === "/";
 
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-950 text-white flex items-center justify-center">
         <p className="text-gray-400">Loading...</p>
       </div>
-    )
+    );
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
-      <header className="border-b border-gray-800 px-6 py-4 flex items-center justify-between">
-        <Link to="/" className="text-xl font-bold tracking-tight">
-          TempoTailor
-        </Link>
-        <nav className="flex items-center gap-6">
-          {user ? (
-            <>
-              <Link
-                to="/create"
-                className="text-gray-400 hover:text-white text-sm transition-colors"
-              >
-                Create
-              </Link>
-              <Link
-                to="/history"
-                className="text-gray-400 hover:text-white text-sm transition-colors"
-              >
-                My runs
-              </Link>
-              <span className="text-gray-400 text-sm">
-                {user.display_name || user.email || user.id}
-              </span>
-              <button
-                onClick={logout}
-                className="px-4 py-2 text-sm rounded-lg bg-gray-800 hover:bg-gray-700"
-              >
-                Log out
-              </button>
-            </>
-          ) : (
-            <>
-              {!isLanding && (
+    <div className={`min-h-screen text-white ${isLanding ? "bg-gray-950" : "mesh-gradient"}`}>
+      {!isLanding && (
+        <nav className="relative z-10 flex items-center justify-between px-6 py-5 md:px-10 lg:px-16">
+          <Link
+            to="/"
+            className="text-xl md:text-2xl font-bold text-white tracking-tight"
+          >
+            TempoTailor
+          </Link>
+          <div className="flex items-center gap-4 md:gap-6">
+            {user ? (
+              <>
                 <Link
-                  to="/"
-                  className="text-gray-400 hover:text-white text-sm transition-colors"
+                  to="/create"
+                  className="text-white text-sm font-medium hover:text-green-400 transition-colors"
                 >
-                  Home
+                  Create
                 </Link>
-              )}
-              <Button onClick={login}>Log in with Spotify</Button>
-            </>
-          )}
+                <Link
+                  to="/history"
+                  className="text-white text-sm font-medium hover:text-green-400 transition-colors"
+                >
+                  My runs
+                </Link>
+                <div className="flex items-center gap-2">
+                  <div
+                    className="h-9 w-9 rounded-full overflow-hidden border border-white/20 flex-shrink-0 bg-violet-900/60"
+                    aria-hidden
+                  >
+                    {user.image_url ? (
+                      <img
+                        src={user.image_url}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="h-full w-full flex items-center justify-center">
+                        <svg
+                          className="w-5 h-5 text-violet-300"
+                          fill="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-sm text-gray-300 max-w-[120px] truncate hidden sm:inline">
+                    {user.display_name || user.email || "Profile"}
+                  </span>
+                </div>
+                <button
+                  onClick={logout}
+                  className="px-4 py-2 text-sm font-medium rounded-full border border-white/20 hover:bg-white/5 transition-colors text-white"
+                >
+                  Log out
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={login}
+                className="px-4 py-2 text-sm font-medium rounded-full border border-white/20 hover:bg-white/5 transition-colors text-white"
+              >
+                Log in with Spotify
+              </button>
+            )}
+          </div>
         </nav>
-      </header>
+      )}
       <main>{children}</main>
     </div>
-  )
+  );
 }
 
 function App() {
@@ -123,7 +153,7 @@ function App() {
         </Routes>
       </AppLayout>
     </BrowserRouter>
-  )
+  );
 }
 
-export default App
+export default App;

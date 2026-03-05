@@ -28,7 +28,7 @@ def get_auth_url(state: str | None = None) -> str:
 
 def exchange_code_for_token(code: str) -> dict:
     oauth = get_spotify_oauth()
-    return oauth.get_access_token(code, as_dict=True)
+    return oauth.get_access_token(code, as_dict=True, check_cache=False)
 
 
 def get_spotify_client(token: dict) -> Spotify:

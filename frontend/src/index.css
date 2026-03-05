@@ -1,1 +1,86 @@
 @import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+.mesh-gradient {
+  background-color: #0a0a0b;
+  background-image:
+    radial-gradient(
+      ellipse 135% 110% at 0% 0%,
+      rgba(194, 65, 12, 0.48) 0%,
+      transparent 60%
+    ),
+    radial-gradient(
+      ellipse 80% 100% at 50% 30%,
+      rgba(88, 28, 135, 0.5) 0%,
+      transparent 55%
+    ),
+    radial-gradient(
+      ellipse 68% 78% at 85% 50%,
+      rgba(56, 189, 248, 0.45) 0%,
+      transparent 55%
+    ),
+    radial-gradient(
+      ellipse 100% 80% at 100% 100%,
+      rgba(13, 78, 78, 0.48) 0%,
+      transparent 50%
+    );
+  background-attachment: fixed;
+}
+
+/* Pace slider - track and runner thumb */
+.pace-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 12px;
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.08) 0px,
+    rgba(255, 255, 255, 0.08) 2px,
+    transparent 2px,
+    transparent 8px
+  );
+  background-color: rgba(0, 0, 0, 0.4);
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.pace-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 120px;
+  height: 120px;
+  margin-top: -55px;
+  background: url("/assets/Gemini_run_icon.svg") center/contain no-repeat;
+  cursor: pointer;
+  filter: drop-shadow(0 0 6px rgba(74, 222, 128, 0.6));
+}
+
+.pace-slider::-moz-range-thumb {
+  width: 120px;
+  height: 120px;
+  margin-top: -55px;
+  background: url("/assets/Gemini_run_icon.svg") center/contain no-repeat;
+  background-color: transparent;
+  border: none;
+  cursor: pointer;
+  filter: drop-shadow(0 0 8px rgba(74, 222, 128, 0.7));
+}
+
+.pace-slider::-webkit-slider-runnable-track {
+  height: 12px;
+  border-radius: 6px;
+}
+
+.pace-slider::-moz-range-track {
+  height: 12px;
+  border-radius: 6px;
+  background: transparent;
+}

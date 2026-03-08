@@ -44,27 +44,12 @@ function PauseIcon() {
   );
 }
 
-function LoadingSpinner() {
+function LoadingSkeleton() {
   return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      className="animate-spin"
+    <div
+      className="w-4 h-4 rounded-full animate-pulse bg-white/30"
       aria-hidden
-    >
-      <circle
-        cx="12"
-        cy="12"
-        r="10"
-        stroke="currentColor"
-        strokeWidth="3"
-        strokeLinecap="round"
-        strokeDasharray="32"
-        strokeDashoffset="12"
-      />
-    </svg>
+    />
   );
 }
 
@@ -103,7 +88,7 @@ export function PreviewPlayer({
       className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-white transition-colors"
     >
       {isLoading ? (
-        <LoadingSpinner />
+        <LoadingSkeleton />
       ) : isPlaying ? (
         <PauseIcon />
       ) : (

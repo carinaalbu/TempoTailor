@@ -145,7 +145,7 @@ export function LandingPage() {
           id="how-it-works"
           className="relative px-6 py-16 md:py-24 lg:py-32"
         >
-          <h2 className="text-2xl font-bold text-white mb-16 md:mb-20 pl-4 md:pl-8 lg:pl-16">
+          <h2 className="max-w-3xl mx-auto text-left text-2xl font-bold text-white mb-16 md:mb-20 pl-[186px] md:pl-[218px] lg:pl-[250px]">
             How TempoTailor works
           </h2>
 

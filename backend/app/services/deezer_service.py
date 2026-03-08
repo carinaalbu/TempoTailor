@@ -10,9 +10,11 @@ from app.core.config import settings
 
 BPM_VARIANCE = 8  # ±8 BPM for base range (no half/double—users want actual cadence)
 MIN_BPM_MATCHES = 10  # Below this, include tracks without BPM as fallback
-NEAR_BASE_TOLERANCE = 12  # When few harmonic matches, also accept ±12 of base
-SEED_ARTIST_BPM_TOLERANCE = 20  # ±20 BPM for seed artist tracks (user asked for them)
+MAX_WITHOUT_BPM = 3  # Cap unknown-BPM tracks—they can be any tempo (ballads, etc.)
+NEAR_BASE_TOLERANCE = 10  # When few harmonic matches, also accept ±10 of base (was 12)
+SEED_ARTIST_BPM_TOLERANCE = 12  # ±12 BPM for seed artist tracks (was 20—avoids slow outliers)
 HARMONIC_SEARCH_LIMIT = 50  # Tracks per parallel BPM-range query
+PROGRESSIVE_BPM_STEPS = [16, 24, 32, 40]  # Expand search progressively to avoid huge BPM jumps
 
 # Deezer chart genre IDs (chart tracks have better BPM/ISRC metadata)
 _GENRE_TO_CHART_ID: dict[str, int] = {
@@ -113,6 +115,26 @@ def _closest_harmonic_distance(bpm: float, target_cadence: int) -> float:
     return min(abs(bpm - base), abs(bpm - half), abs(bpm - double))
 
 
+def _parse_release_year(release_date: str | None, album: dict | None = None) -> int | None:
+    """Parse year from release_date string (YYYY-MM-DD, YYYY-MM, or YYYY)."""
+    raw = release_date
+    if not raw and album:
+        raw = (album or {}).get("release_date") if isinstance(album, dict) else None
+    if not raw or not isinstance(raw, str):
+        return None
+    try:
+        return int(raw[:4])
+    except (ValueError, TypeError):
+        return None
+
+
+def _year_in_range(track_year: int | None, min_year: int, max_year: int) -> bool:
+    """Check if track year falls within [min_year, max_year]. None = no filter (include)."""
+    if track_year is None:
+        return True
+    return min_year <= track_year <= max_year
+
+
 @dataclass
 class DeezerCandidate:
     """Normalized track candidate from Deezer for Spotify resolution."""
@@ -123,6 +145,7 @@ class DeezerCandidate:
     bpm: float | None
     preview_url: str | None
     deezer_track_id: int | None = None
+    release_year: int | None = None
 
 
 def _mood_terms_from_vibe(vibe_params: dict) -> list[str]:
@@ -363,12 +386,17 @@ def get_deezer_candidates(
     target_bpm: int,
     vibe_params: dict,
     limit: int = 40,
+    release_year: int | None = None,
 ) -> list[DeezerCandidate]:
     """
     Harmonic Entrainment: fetch base, half-time, and double-time BPM ranges in parallel
     to massively expand the candidate pool. Merge, deduplicate by ISRC/Deezer ID, then
     filter to tracks in any harmonic range for the LLM judge.
+    If release_year is set, filter to tracks from (year-5) to (year+5).
     """
+    year_min = (release_year - 5) if release_year else None
+    year_max = (release_year + 5) if release_year else None
+
     genres = vibe_params.get("seed_genres") or []
     seed_artists = vibe_params.get("seed_artists") or []
     seed_tracks = vibe_params.get("seed_tracks") or []
@@ -495,6 +523,7 @@ def get_deezer_candidates(
             raw_preview = full.get("preview") or orig.get("preview")
             preview_url = raw_preview if isinstance(raw_preview, str) and raw_preview.strip() else None
             deezer_track_id = full.get("id") or orig.get("id")
+            track_year = _parse_release_year(full.get("release_date"), full.get("album"))
             cand = DeezerCandidate(
                 title=title,
                 artist=artist_name,
@@ -502,6 +531,7 @@ def get_deezer_candidates(
                 bpm=None,
                 preview_url=preview_url,
                 deezer_track_id=deezer_track_id,
+                release_year=track_year,
             )
 
             bpm_val = full.get("bpm")
@@ -518,7 +548,11 @@ def get_deezer_candidates(
                     bpm=bpm,
                     preview_url=preview_url,
                     deezer_track_id=deezer_track_id,
+                    release_year=track_year,
                 )
+                # Year filter: skip if release_year set and track outside range
+                if year_min is not None and year_max is not None and not _year_in_range(track_year, year_min, year_max):
+                    continue
                 # Base BPM only—no half-time/double-time (users want actual cadence match)
                 base_rng = ranges["base"]
                 if base_rng.min_bpm <= bpm <= base_rng.max_bpm:
@@ -531,6 +565,9 @@ def get_deezer_candidates(
                     dist = abs(bpm - target_bpm)
                     seed_artist_tracks.append((cand_with_bpm, dist))
             else:
+                # Year filter for no-BPM tracks
+                if year_min is not None and year_max is not None and not _year_in_range(track_year, year_min, year_max):
+                    continue
                 # No BPM: include if from seed artist (user asked for them)
                 if seed_artists and _is_seed_artist(artist_name, seed_artists):
                     seed_artist_tracks.append((cand, 999.0))  # Lower priority
@@ -559,9 +596,102 @@ def get_deezer_candidates(
                 candidates.append(c)
                 added += 1
 
-    if len(candidates) < MIN_BPM_MATCHES and without_bpm:
-        needed = limit - len(candidates)
-        candidates.extend(without_bpm[:needed])
+    # Progressive BPM expansion: when few matches, search ±16, ±24, ±32, ±40 to avoid huge jumps
+    TARGET_CANDIDATES = 25
+    seen_ids_cand = {c.deezer_track_id for c in candidates if c.deezer_track_id}
+    for step in PROGRESSIVE_BPM_STEPS:
+        if len(candidates) >= TARGET_CANDIDATES:
+            break
+        bpm_min = max(60, target_bpm - step)
+        bpm_max = min(200, target_bpm + step)
+        progressive: list[tuple[DeezerCandidate, float]] = []
+        for genre in genres_to_query:
+            for t in _search_deezer_with_bpm(base, genre, bpm_min, bpm_max, limit=30):
+                tid = t.get("id")
+                if not tid or tid in seen_ids_cand:
+                    continue
+                full = _fetch_track_bpm(tid)
+                if not full:
+                    continue
+                bpm_val = full.get("bpm")
+                if bpm_val is None:
+                    continue
+                try:
+                    bpm = float(bpm_val)
+                except (TypeError, ValueError):
+                    continue
+                if not (bpm_min <= bpm <= bpm_max):
+                    continue
+                track_year = _parse_release_year(full.get("release_date"), full.get("album"))
+                if year_min is not None and year_max is not None and not _year_in_range(track_year, year_min, year_max):
+                    continue
+                artist_name = "Unknown"
+                if isinstance(full.get("artist"), dict):
+                    artist_name = full.get("artist", {}).get("name") or artist_name
+                title = full.get("title") or t.get("title") or "Unknown"
+                isrc = full.get("isrc") or t.get("isrc")
+                raw_preview = full.get("preview") or t.get("preview")
+                preview_url = raw_preview if isinstance(raw_preview, str) and raw_preview.strip() else None
+                dist = abs(bpm - target_bpm)
+                progressive.append((
+                    DeezerCandidate(
+                        title=title,
+                        artist=artist_name,
+                        isrc=isrc,
+                        bpm=bpm,
+                        preview_url=preview_url,
+                        deezer_track_id=tid,
+                        release_year=track_year,
+                    ),
+                    dist,
+                ))
+                seen_ids_cand.add(tid)
+        progressive.sort(key=lambda x: x[1])
+        needed = min(TARGET_CANDIDATES - len(candidates), limit - len(candidates), len(progressive))
+        for c, _ in progressive[:needed]:
+            candidates.append(c)
+
+    # Fallback when few BPM matches: add tracks from strict primary-genre chart only (best vibe match)
+    if len(candidates) < MIN_BPM_MATCHES:
+        primary_genre = (genres or ["electronic"])[0]
+        primary_genre = (primary_genre or "").strip().lower() or "electronic"
+        chart_id = _GENRE_TO_CHART_ID.get(primary_genre) or _GENRE_TO_CHART_ID.get("electronic", 113)
+        seen_cand_ids = {c.deezer_track_id for c in candidates if c.deezer_track_id}
+        genre_fallback: list[DeezerCandidate] = []
+        for t in _fetch_chart_tracks(base, chart_id, 60):
+            tid = t.get("id")
+            if not tid or tid in seen_cand_ids:
+                continue
+            full = _fetch_track_bpm(tid)
+            if not full:
+                continue
+            if full.get("bpm") is not None:
+                continue  # Skip—we only want no-BPM fallbacks from this genre
+            track_year = _parse_release_year(full.get("release_date"), full.get("album"))
+            if year_min is not None and year_max is not None and not _year_in_range(track_year, year_min, year_max):
+                continue
+            artist_name = "Unknown"
+            if isinstance(full.get("artist"), dict):
+                artist_name = full.get("artist", {}).get("name") or artist_name
+            title = full.get("title") or t.get("title") or "Unknown"
+            isrc = full.get("isrc") or t.get("isrc")
+            raw_preview = full.get("preview") or t.get("preview")
+            preview_url = raw_preview if isinstance(raw_preview, str) and raw_preview.strip() else None
+            genre_fallback.append(
+                DeezerCandidate(
+                    title=title,
+                    artist=artist_name,
+                    isrc=isrc,
+                    bpm=None,
+                    preview_url=preview_url,
+                    deezer_track_id=tid,
+                    release_year=track_year,
+                )
+            )
+            if len(genre_fallback) >= MAX_WITHOUT_BPM:
+                break
+        needed = min(limit - len(candidates), MAX_WITHOUT_BPM)
+        candidates.extend(genre_fallback[:needed])
 
     if not candidates:
         raise RuntimeError(

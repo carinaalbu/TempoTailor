@@ -104,7 +104,7 @@ export function CreatePage() {
               </label>
               <textarea
                 id="vibe"
-                placeholder="e.g. cyberpunk city run, chill morning jog, upbeat summer vibes"
+                placeholder="e.g. cyberpunk city run, chill morning jog, upbeat 2010s pop"
                 value={vibe}
                 onChange={(e) => setVibe(e.target.value)}
                 rows={4}

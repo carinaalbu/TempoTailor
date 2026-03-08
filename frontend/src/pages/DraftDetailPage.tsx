@@ -5,6 +5,7 @@ import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card'
 import { PreviewPlayer, usePreviewPlayer } from '../components/PreviewPlayer'
+import { DraftDetailSkeleton } from '../components/DraftDetailSkeleton'
 
 interface DraftTrack {
   id: number
@@ -90,11 +91,7 @@ export function DraftDetailPage() {
   }
 
   if (loading || !draft) {
-    return (
-      <div className="max-w-2xl mx-auto py-12 px-4">
-        <p className="text-gray-400">Loading...</p>
-      </div>
-    )
+    return <DraftDetailSkeleton />
   }
 
   return (

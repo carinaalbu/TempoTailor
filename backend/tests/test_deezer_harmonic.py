@@ -52,9 +52,9 @@ def test_is_seed_artist():
 
 def test_bpm_near_base():
     assert _bpm_near_base(160.0, 160) is True
-    assert _bpm_near_base(168.0, 160) is True   # within ±12
-    assert _bpm_near_base(148.0, 160) is True
-    assert _bpm_near_base(175.0, 160) is False  # outside ±12
+    assert _bpm_near_base(168.0, 160) is True   # within ±10 (168 is 8 away)
+    assert _bpm_near_base(150.0, 160) is True   # within ±10
+    assert _bpm_near_base(175.0, 160) is False  # outside ±10
 
 
 def test_closest_harmonic_distance():

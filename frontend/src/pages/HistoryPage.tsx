@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { PreviewPlayer, usePreviewPlayer } from '../components/PreviewPlayer'
+import { HistoryPageSkeleton } from '../components/HistoryPageSkeleton'
 
 interface DraftTrack {
   id: number
@@ -67,11 +68,7 @@ export function HistoryPage() {
   }, [])
 
   if (loading) {
-    return (
-      <div className="min-h-screen mesh-gradient text-white flex items-center justify-center">
-        <p className="text-gray-400">Loading runs...</p>
-      </div>
-    )
+    return <HistoryPageSkeleton />
   }
 
   return (

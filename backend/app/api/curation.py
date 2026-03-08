@@ -8,12 +8,36 @@ from app.schemas.llm import VibeTranslation
 from app.services.pace_service import pace_to_bpm
 from app.services.llm_service import translate_vibe, judge_tracks, generate_playlist_name
 from app.services.deezer_service import get_deezer_candidates
-from app.services.spotify_service import (
-    resolve_deezer_to_spotify,
-)
+from app.services.spotify_service import ResolvedTrack, resolve_deezer_to_spotify
 from app.services.spotify_auth import get_spotify_client
 
 router = APIRouter(prefix="/curation", tags=["curation"])
+
+
+def _parse_spotify_release_year(spotify_track: dict) -> int | None:
+    """Parse year from Spotify track album.release_date (YYYY-MM-DD, YYYY-MM, or YYYY)."""
+    album = spotify_track.get("album") or {}
+    raw = album.get("release_date") if isinstance(album, dict) else None
+    if not raw or not isinstance(raw, str):
+        return None
+    try:
+        return int(raw[:4])
+    except (ValueError, TypeError):
+        return None
+
+
+def _filter_resolved_by_year(resolved: list[ResolvedTrack], release_year: int | None) -> list[ResolvedTrack]:
+    """Filter resolved tracks to year-5..year+5 when release_year is set. Keep tracks without date."""
+    if not release_year:
+        return resolved
+    year_min, year_max = release_year - 5, release_year + 5
+    filtered = []
+    for rt in resolved:
+        t = rt.spotify_track
+        y = _parse_spotify_release_year(t)
+        if y is None or year_min <= y <= year_max:
+            filtered.append(rt)
+    return filtered
 
 
 @router.post("", response_model=CurationResponse)
@@ -53,6 +77,7 @@ def _create_curation_impl(req: CurationRequest, token: dict):
     else:
         raise HTTPException(status_code=400, detail="Provide vibe text or energy + genres")
     vibe_params = vibe_translation.model_dump()
+    release_year = vibe_params.get("release_year")
     all_seed_genres = (vibe_params.get("seed_genres") or [])[:4]
     primary_seed_genres = all_seed_genres[:2]
     fallback_seed_genres = all_seed_genres[2:4]
@@ -68,6 +93,7 @@ def _create_curation_impl(req: CurationRequest, token: dict):
             target_bpm=target_bpm,
             vibe_params=primary_vibe_params,
             limit=150,
+            release_year=release_year,
         )
     except Exception as e:
         raise HTTPException(
@@ -76,6 +102,7 @@ def _create_curation_impl(req: CurationRequest, token: dict):
         ) from e
 
     resolved = resolve_deezer_to_spotify(sp, candidates, limit=100)
+    resolved = _filter_resolved_by_year(resolved, release_year)
 
     # Fallback: second Deezer pass using backup genres only
     if len(resolved) < 20:
@@ -86,12 +113,14 @@ def _create_curation_impl(req: CurationRequest, token: dict):
                 target_bpm=target_bpm,
                 vibe_params=backup_vibe_params,
                 limit=150,
+                release_year=release_year,
             )
             backup_resolved = resolve_deezer_to_spotify(sp, backup_candidates, limit=100)
         except Exception:
             backup_resolved = []
 
         seen = {rt.spotify_track.get("id") for rt in resolved if rt.spotify_track.get("id")}
+        backup_resolved = _filter_resolved_by_year(backup_resolved, release_year)
         for rt in backup_resolved:
             tid = rt.spotify_track.get("id")
             if tid and tid not in seen:
@@ -108,8 +137,10 @@ def _create_curation_impl(req: CurationRequest, token: dict):
                 target_bpm=target_bpm,
                 vibe_params=last_resort_params,
                 limit=150,
+                release_year=release_year,
             )
             resolved = resolve_deezer_to_spotify(sp, last_candidates, limit=100)
+            resolved = _filter_resolved_by_year(resolved, release_year)
         except Exception:
             pass
 
@@ -178,6 +209,7 @@ def _create_curation_impl(req: CurationRequest, token: dict):
         deezer_track_id = rt.deezer_track_id
         try:
             artists = [a.get("name", "") for a in (t.get("artists") or [])]
+            release_year = _parse_spotify_release_year(t)
             tracks_detail.append(
                 CurationTrack(
                     id=t.get("id") or tid,
@@ -185,6 +217,7 @@ def _create_curation_impl(req: CurationRequest, token: dict):
                     artists=artists,
                     preview_url=preview_url,
                     deezer_track_id=deezer_track_id,
+                    release_year=release_year,
                 )
             )
         except Exception:

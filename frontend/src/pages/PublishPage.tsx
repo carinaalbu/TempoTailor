@@ -4,6 +4,7 @@ import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { Button } from '../components/ui/button'
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card'
+import { PublishPageSkeleton } from '../components/PublishPageSkeleton'
 
 interface PublishResponse {
   playlist_id: string
@@ -68,11 +69,7 @@ export function PublishPage() {
   }
 
   if (loading) {
-    return (
-      <div className="max-w-xl mx-auto py-12 px-4">
-        <p className="text-gray-400">Loading...</p>
-      </div>
-    )
+    return <PublishPageSkeleton />
   }
 
   if (!draft && fetchError) {
@@ -92,11 +89,7 @@ export function PublishPage() {
   }
 
   if (!draft) {
-    return (
-      <div className="max-w-xl mx-auto py-12 px-4">
-        <p className="text-gray-400">Loading...</p>
-      </div>
-    )
+    return <PublishPageSkeleton />
   }
 
   if (success) {

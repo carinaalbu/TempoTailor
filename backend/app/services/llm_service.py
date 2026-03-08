@@ -41,10 +41,12 @@ Output valid JSON matching this schema (target_energy, target_valence, target_da
   "target_danceability": 0.5,
   "seed_genres": ["genre1", "genre2"],
   "seed_artists": [],
-  "seed_tracks": []
+  "seed_tracks": [],
+  "release_year": null
 }
 Use ONLY these genre names (they map to Deezer charts): pop, rock, electronic, hip-hop, indie, r&b, dance, house, acoustic, jazz. Do NOT use folk, nature, ambient, or other unmapped genres.
 If the user mentions specific artists or songs, you MUST add their exact names to seed_artists or seed_tracks (up to 3 each). This is critical—users expect to hear songs from artists they name.
+If the user mentions a year or era (e.g. "2010s", "2005", "90s", "early 2000s", "music from 2015"), set release_year to a single year (e.g. 2010 for "2010s", 2005 for "2005", 1995 for "90s"). Otherwise omit or set to null.
 Return only the best-matching seed_genres (1–4). No padding. First 1–2 = primary; remaining = fallback when not enough songs are found.
 Output ONLY the JSON object. No reasoning, explanation, or markdown."""
 

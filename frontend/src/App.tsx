@@ -14,6 +14,7 @@ import { HistoryPage } from "@/pages/HistoryPage";
 import { DraftDetailPage } from "@/pages/DraftDetailPage";
 import { PublishPage } from "@/pages/PublishPage";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { AppShellSkeleton } from "@/components/AppShellSkeleton";
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading, login, logout } = useAuth();
@@ -21,11 +22,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   const isLanding = location.pathname === "/";
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gray-950 text-white flex items-center justify-center">
-        <p className="text-gray-400">Loading...</p>
-      </div>
-    );
+    return <AppShellSkeleton />;
   }
 
   return (

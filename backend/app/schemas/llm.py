@@ -12,6 +12,12 @@ class VibeTranslation(BaseModel):
     seed_genres: list[str] = Field(max_length=5, description="Spotify genre seeds")
     seed_artists: list[str] = Field(default_factory=list, max_length=5)
     seed_tracks: list[str] = Field(default_factory=list, max_length=5)
+    release_year: int | None = Field(
+        default=None,
+        ge=1900,
+        le=2100,
+        description="Extract only if user mentions a year/era (e.g. 2010s, 2005, 90s). Songs filtered to year-5..year+5.",
+    )
 
 
 class JudgeResult(BaseModel):

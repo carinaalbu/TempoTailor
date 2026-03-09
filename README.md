@@ -10,6 +10,7 @@ AI-powered music curation for runners. Enter your target pace and a vibe descrip
 
 ## LLMs & tools used to build it
 
+- **Cursor** – AI-assisted coding.
 - **LLM**: Local [LM Studio](https://lmstudio.ai/) (OpenAI-compatible API) with models like Qwen 2.5 7B Instruct—no cloud API keys required.
 - **Music discovery**: [Deezer API](https://developers.deezer.com/) for BPM-filtered charts and search.
 - **Playback & playlists**: [Spotify Web API](https://developer.spotify.com/documentation/web-api) (OAuth, playlist creation, ISRC-based track resolution).
@@ -37,3 +38,40 @@ While building the discovery flow, Cursor claimed the Deezer API doesn’t suppo
 
 1. **LM Studio** – Run a compatible model locally at `http://localhost:1234`
 2. **Spotify Developer App** – Create an app at [Spotify Dashboard](https://developer.spotify.com/dashboard) and add redirect URI: `http://localhost:8000/auth/callback`
+
+## Setup
+
+### Backend
+
+```bash
+cd backend
+pip install -r requirements.txt
+cp .env.example .env  # Edit with your Spotify credentials
+uvicorn main:app --reload --port 8000
+```
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open [http://localhost:5173](http://localhost:5173).
+
+## Environment variables
+
+| Variable                | Description                           |
+| ----------------------- | ------------------------------------- |
+| `SPOTIFY_CLIENT_ID`     | From Spotify Dashboard                |
+| `SPOTIFY_CLIENT_SECRET` | From Spotify Dashboard                |
+| `SPOTIFY_REDIRECT_URI`  | `http://localhost:8000/auth/callback` |
+| `LM_STUDIO_BASE_URL`    | `http://localhost:1234/v1`            |
+| `DATABASE_URL`          | `sqlite:///./tempo_tailor.db`         |
+
+## Tests
+
+```bash
+cd backend && python -m pytest tests/ -v
+```
